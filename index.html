@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Win Journal - Level Up Club</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏆 Daily Win Journal</h1>
+            <p class="subtitle">Level Up Club - Track Your Daily Wins</p>
+        </header>
+
+        <main>
+            <section class="input-section">
+                <h2>Today's Win</h2>
+                <form id="winForm">
+                    <div class="form-group">
+                        <label for="winTitle">Win Title</label>
+                        <input type="text" id="winTitle" placeholder="What did you accomplish today?" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="winDescription">Description</label>
+                        <textarea id="winDescription" placeholder="Add more details about your win..." rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="winCategory">Category</label>
+                        <select id="winCategory">
+                            <option value="work">Work</option>
+                            <option value="health">Health</option>
+                            <option value="learning">Learning</option>
+                            <option value="personal">Personal</option>
+                            <option value="social">Social</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary">Add Win</button>
+                </form>
+            </section>
+
+            <section class="stats-section">
+                <div class="stat-card">
+                    <h3>Total Wins</h3>
+                    <p class="stat-number" id="totalWins">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>This Week</h3>
+                    <p class="stat-number" id="weekWins">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Streak Days</h3>
+                    <p class="stat-number" id="streakDays">0</p>
+                </div>
+            </section>
+
+            <section class="wins-section">
+                <h2>Your Wins</h2>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="work">Work</button>
+                    <button class="filter-btn" data-filter="health">Health</button>
+                    <button class="filter-btn" data-filter="learning">Learning</button>
+                    <button class="filter-btn" data-filter="personal">Personal</button>
+                </div>
+                <div id="winsList" class="wins-list">
+                    <p class="empty-state">No wins yet. Add your first win above!</p>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>© 2025 Level Up Club - Daily Win Journal. Keep winning! 💪</p>
+            <button id="exportBtn" class="btn-secondary">Export Data</button>
+            <button id="clearBtn" class="btn-secondary">Clear All</button>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
