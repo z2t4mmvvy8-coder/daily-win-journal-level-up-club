@@ -1,10 +1,20 @@
-// Firebase setup
-const { initializeApp } = firebase;
-const { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc } = firebase.firestore;
+// Firebase setup - wait for Firebase to load
+let db;
 
-// Initialize Firebase
-const app = initializeApp(window.firebaseConfig);
-const db = getFirestore(app);
+function initializeFirebase() {
+    if (!window.firebase) {
+        console.error('Firebase not loaded yet');
+        setTimeout(initializeFirebase, 100);
+        return;
+    }
+    
+    // Initialize Firebase
+    const app = firebase.initializeApp(window.firebaseConfig);
+    db = firebase.firestore();
+    
+    // Initialize the journal app
+    window.journal = new DailyWinJournal();
+}
 
 // Daily Win Journal App
 class DailyWinJournal {
@@ -135,8 +145,9 @@ class DailyWinJournal {
     // Load wins from Firestore
     async loadDataFromFirestore() {
         try {
-            const q = query(collection(db, 'users', this.currentUser, 'wins'));
-            const snapshot = await getDocs(q);
+            if (!db || !this.currentUser) return;
+            
+            const snapshot = await db.collection('users').doc(this.currentUser).collection('wins').get();
             this.wins = [];
             
             snapshot.forEach(doc => {
@@ -153,7 +164,9 @@ class DailyWinJournal {
     // Save win to Firestore
     async saveWinToFirestore(win) {
         try {
-            const docRef = await addDoc(collection(db, 'users', this.currentUser, 'wins'), win);
+            if (!db || !this.currentUser) return;
+            
+            const docRef = await db.collection('users').doc(this.currentUser).collection('wins').add(win);
             win.id = docRef.id;
             return win;
         } catch (error) {
@@ -165,7 +178,9 @@ class DailyWinJournal {
     // Delete win from Firestore
     async deleteWinFromFirestore(id) {
         try {
-            await deleteDoc(doc(db, 'users', this.currentUser, 'wins', id));
+            if (!db || !this.currentUser) return;
+            
+            await db.collection('users').doc(this.currentUser).collection('wins').doc(id).delete();
         } catch (error) {
             console.error('Error deleting win:', error);
         }
@@ -447,5 +462,12 @@ class DailyWinJournal {
 
 // Initialize the journal when Firebase is ready
 document.addEventListener('DOMContentLoaded', () => {
-    window.journal = new DailyWinJournal();
+    // Wait a moment for Firebase scripts to load
+    setTimeout(() => {
+        if (window.firebase && window.firebaseConfig) {
+            initializeFirebase();
+        } else {
+            console.error('Firebase not available');
+        }
+    }, 500);
 });
