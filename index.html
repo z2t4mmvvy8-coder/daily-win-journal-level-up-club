@@ -164,15 +164,26 @@
             window.db = firebase.firestore();
             
             // Enable offline persistence
-            window.db.enablePersistence().catch((err) => {
-                if (err.code === 'failed-precondition') {
-                    console.warn('Multiple tabs, persistence disabled');
-                } else if (err.code === 'unimplemented') {
-                    console.warn('Browser doesn\'t support persistence');
-                }
+            window.db.enablePersistence()
+                .then(() => {
+                    console.log('✅ Offline persistence enabled');
+                })
+                .catch((err) => {
+                    if (err.code === 'failed-precondition') {
+                        console.warn('⚠️ Multiple tabs open - persistence disabled');
+                        window.db.enablePersistence({experimentalForceOwningTab: true})
+                            .catch(e => console.warn('Persistence error:', e));
+                    } else if (err.code === 'unimplemented') {
+                        console.warn('⚠️ Browser doesn\'t support persistent storage');
+                    }
+                });
+            
+            // Set timeout for network connectivity
+            window.db.settings({ 
+                cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED 
             });
             
-            console.log('✅ Firebase initialized');
+            console.log('✅ Firebase + Firestore initialized');
         } catch (error) {
             console.error('❌ Firebase error:', error);
         }
