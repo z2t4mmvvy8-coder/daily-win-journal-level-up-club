@@ -1,4 +1,18 @@
-// Daily Win Journal App
+// Import Firebase Firestore functions
+import { 
+    doc, 
+    setDoc, 
+    getDoc, 
+    collection, 
+    query, 
+    where, 
+    getDocs,
+    updateDoc,
+    deleteDoc,
+    onSnapshot
+} from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+
+// Daily Win Journal App with Cloud Sync
 class DailyWinJournal {
     constructor() {
         console.log('📝 Constructor called');
@@ -6,16 +20,19 @@ class DailyWinJournal {
         this.currentFilter = 'all';
         this.currentUser = null;
         this.isSignupMode = false;
+        this.db = window.db;
+        this.unsubscribe = null;
         
         this.checkLoginState();
         this.setupEventListeners();
     }
 
     // Check if user is already logged in
-    checkLoginState() {
+    async checkLoginState() {
         const savedEmail = localStorage.getItem('userEmail');
         if (savedEmail) {
             this.currentUser = savedEmail;
+            await this.loadWinsFromCloud();
             this.showApp();
         }
     }
@@ -117,26 +134,13 @@ class DailyWinJournal {
         errorDiv.textContent = '';
     }
 
-    // Get all users from localStorage
-    getAllUsers() {
-        const usersJson = localStorage.getItem('__users__');
-        return usersJson ? JSON.parse(usersJson) : {};
-    }
-
-    // Save users to localStorage
-    saveAllUsers(users) {
-        localStorage.setItem('__users__', JSON.stringify(users));
-    }
-
     // Simple hash function for passwords
     hashPassword(password) {
-        // This is a simple approach - not cryptographically secure
-        // For production, use proper password hashing
-        return btoa(password + 'salt'); // Base64 encoding
+        return btoa(password + 'salt'); // Base64 encoding (for demo)
     }
 
-    // Handle login/signup
-    handleLogin() {
+    // Handle login/signup with Firebase
+    async handleLogin() {
         const email = document.getElementById('userLoginEmail').value.trim();
         const password = document.getElementById('userLoginPassword').value.trim();
         const errorDiv = document.getElementById('authError');
@@ -161,93 +165,114 @@ class DailyWinJournal {
             return;
         }
 
-        const users = this.getAllUsers();
         const hashedPassword = this.hashPassword(password);
 
-        if (this.isSignupMode) {
-            // Signup mode - create new account
-            if (users[email]) {
-                errorDiv.textContent = '❌ This email already has an account. Try signing in.';
-                return;
-            }
-            users[email] = hashedPassword;
-            this.saveAllUsers(users);
-            errorDiv.textContent = '✅ Account created! Signing in...';
-            errorDiv.style.color = '#51cf66';
-            setTimeout(() => {
+        try {
+            const userRef = doc(this.db, 'users', email);
+            const userSnap = await getDoc(userRef);
+
+            if (this.isSignupMode) {
+                // Signup mode
+                if (userSnap.exists()) {
+                    errorDiv.textContent = '❌ This email already has an account. Try signing in.';
+                    return;
+                }
+                
+                // Create new user in Firestore
+                await setDoc(userRef, {
+                    email: email,
+                    password: hashedPassword,
+                    createdAt: new Date().toISOString(),
+                    wins: []
+                });
+                
+                errorDiv.textContent = '✅ Account created! Signing in...';
+                errorDiv.style.color = '#51cf66';
+                
+                setTimeout(() => {
+                    this.completeLogin(email, errorDiv);
+                }, 1000);
+            } else {
+                // Login mode
+                if (!userSnap.exists()) {
+                    errorDiv.textContent = '❌ Email not found. Create an account first.';
+                    return;
+                }
+
+                if (userSnap.data().password !== hashedPassword) {
+                    errorDiv.textContent = '❌ Incorrect password.';
+                    return;
+                }
+
                 this.completeLogin(email, errorDiv);
-            }, 1000);
-        } else {
-            // Login mode - verify credentials
-            if (!users[email]) {
-                errorDiv.textContent = '❌ Email not found. Create an account first.';
-                return;
             }
-            if (users[email] !== hashedPassword) {
-                errorDiv.textContent = '❌ Incorrect password.';
-                return;
-            }
-            this.completeLogin(email, errorDiv);
+        } catch (error) {
+            console.error('Auth error:', error);
+            errorDiv.textContent = '❌ Error: ' + error.message;
         }
     }
 
     // Complete the login process
-    completeLogin(email, errorDiv) {
+    async completeLogin(email, errorDiv) {
         this.currentUser = email;
         localStorage.setItem('userEmail', email);
         errorDiv.textContent = '';
         errorDiv.style.color = '';
         
-        this.loadWins();
+        await this.loadWinsFromCloud();
         this.showApp();
     }
 
-    // Handle logout
-    handleLogout() {
-        if (confirm('Sign out?')) {
-            this.currentUser = null;
-            localStorage.removeItem('userEmail');
-            this.wins = [];
-            this.isSignupMode = false;
+    // Load wins from Firestore (real-time sync)
+    async loadWinsFromCloud() {
+        try {
+            const userRef = doc(this.db, 'users', this.currentUser);
             
-            document.getElementById('authScreen').classList.remove('hidden');
-            document.getElementById('appScreen').classList.add('hidden');
-            document.getElementById('userLoginEmail').value = '';
-            document.getElementById('userLoginPassword').value = '';
-            document.getElementById('authError').textContent = '';
-            
-            // Reset auth form to login mode
-            const authTitle = document.getElementById('authTitle');
-            const loginBtn = document.getElementById('loginBtn');
-            const toggleBtn = document.getElementById('toggleSignup');
-            authTitle.textContent = 'Sign In';
-            loginBtn.textContent = 'Sign In';
-            toggleBtn.textContent = 'New user? Create Account';
+            // Unsubscribe from previous listener if exists
+            if (this.unsubscribe) {
+                this.unsubscribe();
+            }
+
+            // Set up real-time listener
+            this.unsubscribe = onSnapshot(userRef, (doc) => {
+                if (doc.exists()) {
+                    this.wins = doc.data().wins || [];
+                    this.render();
+                    this.updateStats();
+                }
+            }, (error) => {
+                console.error('Error loading wins:', error);
+                // Fallback to localStorage
+                this.loadWinsLocal();
+            });
+
+        } catch (error) {
+            console.error('Cloud load error:', error);
+            this.loadWinsLocal();
         }
     }
 
-    // Show the app screen
-    showApp() {
-        document.getElementById('authScreen').classList.add('hidden');
-        document.getElementById('appScreen').classList.remove('hidden');
-        document.getElementById('userEmail').textContent = `Signed in as: ${this.currentUser}`;
-        
-        this.loadWins();
-        this.render();
-        this.updateStats();
-    }
-
-    // Load wins from localStorage
-    loadWins() {
-        const key = `wins_${this.currentUser}`;
-        const saved = localStorage.getItem(key);
+    // Fallback: Load wins from localStorage
+    loadWinsLocal() {
+        const saved = localStorage.getItem(`wins_${this.currentUser}`);
         this.wins = saved ? JSON.parse(saved) : [];
     }
 
-    // Save wins to localStorage
-    saveWins() {
-        const key = `wins_${this.currentUser}`;
-        localStorage.setItem(key, JSON.stringify(this.wins));
+    // Save wins to Firestore and localStorage
+    async saveWins() {
+        try {
+            const userRef = doc(this.db, 'users', this.currentUser);
+            await updateDoc(userRef, {
+                wins: this.wins,
+                updatedAt: new Date().toISOString()
+            });
+            console.log('✅ Wins synced to cloud');
+        } catch (error) {
+            console.error('Error saving wins:', error);
+        }
+
+        // Also save locally for offline support
+        localStorage.setItem(`wins_${this.currentUser}`, JSON.stringify(this.wins));
     }
 
     // Add a new win
@@ -256,97 +281,107 @@ class DailyWinJournal {
         const description = document.getElementById('winDescription').value.trim();
         const category = document.getElementById('winCategory').value;
 
-        if (!title) return;
+        if (!title) {
+            alert('Please enter a win title.');
+            return;
+        }
 
         const win = {
             id: Date.now().toString(),
-            title,
-            description,
-            category,
-            date: new Date().toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            })
+            title: this.escapeHtml(title),
+            description: this.escapeHtml(description),
+            category: category,
+            date: new Date().toISOString(),
+            timestamp: Date.now()
         };
 
         this.wins.unshift(win);
         this.saveWins();
+
+        // Clear form
+        document.getElementById('winForm').reset();
         this.render();
         this.updateStats();
-
-        document.getElementById('winForm').reset();
-        alert('🎉 Win added! Keep going!');
     }
 
     // Delete a win
     deleteWin(id) {
         if (confirm('Delete this win?')) {
-            this.wins = this.wins.filter(win => win.id !== id);
+            this.wins = this.wins.filter(w => w.id !== id);
             this.saveWins();
             this.render();
             this.updateStats();
         }
     }
 
-    // Render wins
+    // Render wins to the page
     render() {
         const winsList = document.getElementById('winsList');
-        const filtered = this.currentFilter === 'all'
-            ? this.wins
-            : this.wins.filter(win => win.category === this.currentFilter);
+
+        if (this.wins.length === 0) {
+            winsList.innerHTML = '<p class="empty-state">No wins yet. Add your first win above!</p>';
+            return;
+        }
+
+        const filtered = this.wins.filter(w => 
+            this.currentFilter === 'all' || w.category === this.currentFilter
+        );
 
         if (filtered.length === 0) {
-            winsList.innerHTML = '<p class="empty-state">No wins yet. Add your first win!</p>';
+            winsList.innerHTML = '<p class="empty-state">No wins in this category yet.</p>';
             return;
         }
 
         winsList.innerHTML = filtered.map(win => `
-            <div class="win-card" data-category="${win.category}">
+            <div class="win-card ${win.category}">
                 <div class="win-header">
-                    <h3 class="win-title">${this.escapeHtml(win.title)}</h3>
-                    <span class="win-category">${win.category.charAt(0).toUpperCase() + win.category.slice(1)}</span>
+                    <h3>${win.title}</h3>
+                    <span class="win-category">${win.category}</span>
                 </div>
-                <p class="win-date">${win.date}</p>
-                ${win.description ? `<p class="win-description">${this.escapeHtml(win.description)}</p>` : ''}
-                <div class="win-actions">
-                    <button class="btn-small btn-delete" onclick="journal.deleteWin('${win.id}')">Delete</button>
+                <p class="win-description">${win.description}</p>
+                <div class="win-footer">
+                    <span class="win-date">${new Date(win.date).toLocaleDateString()}</span>
+                    <button class="win-delete" onclick="window.journal.deleteWin('${win.id}')">🗑️ Delete</button>
                 </div>
             </div>
         `).join('');
     }
 
-    // Update stats
+    // Update statistics
     updateStats() {
+        const now = new Date();
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
         const totalWins = this.wins.length;
-        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const weekWins = this.wins.filter(win => new Date(win.date) >= weekAgo).length;
-        const streak = this.calculateStreak();
+        const weekWins = this.wins.filter(w => new Date(w.date) >= weekAgo).length;
+        const streakDays = this.calculateStreak();
 
         document.getElementById('totalWins').textContent = totalWins;
         document.getElementById('weekWins').textContent = weekWins;
-        document.getElementById('streakDays').textContent = streak;
+        document.getElementById('streakDays').textContent = streakDays;
     }
 
-    // Calculate streak
+    // Calculate win streak
     calculateStreak() {
         if (this.wins.length === 0) return 0;
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const dates = this.wins.map(w => new Date(w.date).toDateString());
+        const uniqueDates = [...new Set(dates)];
 
         let streak = 0;
+        const today = new Date();
         let currentDate = new Date(today);
 
-        const winsByDate = {};
-        this.wins.forEach(win => {
-            const dateStr = new Date(win.date).toDateString();
-            winsByDate[dateStr] = true;
-        });
+        for (const date of uniqueDates.sort(() => -1)) {
+            const winDate = new Date(date);
+            const diff = Math.floor((currentDate - winDate) / (1000 * 60 * 60 * 24));
 
-        while (winsByDate[currentDate.toDateString()]) {
-            streak++;
-            currentDate.setDate(currentDate.getDate() - 1);
+            if (diff === 0 || diff === 1) {
+                streak++;
+                currentDate = winDate;
+            } else {
+                break;
+            }
         }
 
         return streak;
@@ -354,12 +389,18 @@ class DailyWinJournal {
 
     // Export data
     exportData() {
-        const dataStr = JSON.stringify(this.wins, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
+        const data = {
+            user: this.currentUser,
+            exportedAt: new Date().toISOString(),
+            wins: this.wins
+        };
+
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `daily-wins-${new Date().toISOString().split('T')[0]}.json`;
+        link.download = `wins-${this.currentUser}-${new Date().toISOString().split('T')[0]}.json`;
         link.click();
         URL.revokeObjectURL(url);
     }
@@ -385,29 +426,69 @@ class DailyWinJournal {
     // Email all wins
     emailAllWins() {
         if (this.wins.length === 0) {
-            alert('No wins to email. Add some wins first!');
+            alert('No wins to email!');
             return;
         }
 
-        const emailContent = this.formatWinsForEmail();
-        const subject = `My Daily Wins Journal - ${new Date().toLocaleDateString()}`;
-        const mailtoLink = `mailto:${this.currentUser}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailContent)}`;
-        
-        window.location.href = mailtoLink;
+        const emailBody = this.formatWinsForEmail();
+        const subject = `My Daily Wins - ${new Date().toLocaleDateString()}`;
+        const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+        window.location.href = mailto;
     }
 
     // Format wins for email
     formatWinsForEmail() {
-        const header = `🏆 DAILY WIN JOURNAL - ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\n`;
-        const divider = '='.repeat(60) + '\n\n';
-        
-        const winsText = this.wins.map((win, index) => {
-            return `${index + 1}. [${win.category.toUpperCase()}] ${win.title}\n   Date: ${win.date}\n${win.description ? `   Details: ${win.description}\n` : ''}`;
-        }).join('\n');
+        let text = `🏆 Daily Win Journal - ${this.currentUser}\n`;
+        text += `Generated: ${new Date().toLocaleString()}\n\n`;
 
-        const stats = `\n${divider}STATISTICS:\n- Total Wins: ${this.wins.length}\n- Streak Days: ${this.calculateStreak()}\n`;
+        this.wins.forEach((win, idx) => {
+            text += `${idx + 1}. [${win.category.toUpperCase()}] ${win.title}\n`;
+            if (win.description) text += `   ${win.description}\n`;
+            text += `   Date: ${new Date(win.date).toLocaleDateString()}\n\n`;
+        });
+
+        text += `Total Wins: ${this.wins.length}\n`;
+        text += `\n🚀 Keep winning! Track more at: https://z2t4mmvvy8-coder.github.io/daily-win-journal-level-up-club/`;
         
-        return header + divider + winsText + stats + `\n✨ Keep winning! 💪`;
+        return text;
+    }
+
+    // Show the app screen
+    showApp() {
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('appScreen').classList.remove('hidden');
+        document.getElementById('userEmail').textContent = `Signed in as: ${this.currentUser}`;
+        this.render();
+        this.updateStats();
+    }
+
+    // Handle logout
+    handleLogout() {
+        if (confirm('Sign out?')) {
+            // Unsubscribe from real-time updates
+            if (this.unsubscribe) {
+                this.unsubscribe();
+            }
+
+            this.currentUser = null;
+            localStorage.removeItem('userEmail');
+            this.wins = [];
+            this.isSignupMode = false;
+            
+            document.getElementById('authScreen').classList.remove('hidden');
+            document.getElementById('appScreen').classList.add('hidden');
+            document.getElementById('userLoginEmail').value = '';
+            document.getElementById('userLoginPassword').value = '';
+            document.getElementById('authError').textContent = '';
+            
+            // Reset auth form to login mode
+            const authTitle = document.getElementById('authTitle');
+            const loginBtn = document.getElementById('loginBtn');
+            const toggleBtn = document.getElementById('toggleSignup');
+            authTitle.textContent = 'Sign In';
+            loginBtn.textContent = 'Sign In';
+            toggleBtn.textContent = 'New user? Create Account';
+        }
     }
 
     // Setup feedback modal
@@ -443,7 +524,7 @@ class DailyWinJournal {
     }
 
     // Submit feedback
-    submitFeedback() {
+    async submitFeedback() {
         const name = document.getElementById('feedbackName').value.trim();
         const email = document.getElementById('feedbackEmail').value.trim();
         const message = document.getElementById('feedbackMessage').value.trim();
@@ -475,12 +556,13 @@ class DailyWinJournal {
         btn.disabled = true;
         btn.textContent = 'Sending...';
 
-        fetch(`https://formspree.io/f/${formId}`, {
-            method: 'POST',
-            body: formData,
-            headers: { 'Accept': 'application/json' }
-        })
-        .then(response => {
+        try {
+            const response = await fetch(`https://formspree.io/f/${formId}`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'application/json' }
+            });
+
             if (response.ok) {
                 note.textContent = '✅ Sent!';
                 note.style.color = '#51cf66';
@@ -492,21 +574,27 @@ class DailyWinJournal {
             } else {
                 throw new Error('Failed');
             }
-        })
-        .catch(error => {
+        } catch (error) {
             note.textContent = '❌ Error. Try again.';
             note.style.color = '#ff6b6b';
-        })
-        .finally(() => {
+        } finally {
             btn.disabled = false;
             btn.textContent = 'Send Feedback';
-        });
+        }
     }
 }
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 DOMContentLoaded fired - initializing Daily Win Journal');
-    window.journal = new DailyWinJournal();
-    console.log('✅ Journal initialized');
+    
+    // Wait a bit for Firebase to initialize
+    setTimeout(() => {
+        if (window.db) {
+            window.journal = new DailyWinJournal();
+            console.log('✅ Journal initialized with Firebase');
+        } else {
+            console.error('❌ Firebase DB not initialized');
+        }
+    }, 500);
 });
