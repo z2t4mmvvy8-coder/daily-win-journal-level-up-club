@@ -39,21 +39,33 @@ class DailyWinJournal {
 
     // Set up all event listeners
     setupEventListeners() {
+        console.log('⚙️ Setting up event listeners...');
+        
         // Login button
         const loginBtn = document.getElementById('loginBtn');
+        console.log('loginBtn element:', loginBtn);
+        
         if (loginBtn) {
-            loginBtn.addEventListener('click', () => {
+            loginBtn.addEventListener('click', (e) => {
+                console.log('🔐 LOGIN BUTTON CLICKED!', e);
                 this.handleLogin();
             });
+            console.log('✅ Login button listener attached');
+        } else {
+            console.error('❌ loginBtn element not found!');
         }
 
         // Toggle signup/login mode
         const toggleSignup = document.getElementById('toggleSignup');
+        console.log('toggleSignup element:', toggleSignup);
+        
         if (toggleSignup) {
             toggleSignup.addEventListener('click', (e) => {
                 e.preventDefault();
+                console.log('Toggling signup mode');
                 this.toggleSignupMode();
             });
+            console.log('✅ Toggle signup listener attached');
         }
 
         // Logout button
@@ -62,6 +74,7 @@ class DailyWinJournal {
             logoutBtn.addEventListener('click', () => {
                 this.handleLogout();
             });
+            console.log('✅ Logout button listener attached');
         }
 
         // Win form
@@ -71,6 +84,7 @@ class DailyWinJournal {
                 e.preventDefault();
                 this.addWin();
             });
+            console.log('✅ Win form listener attached');
         }
 
         // Filter buttons
@@ -82,6 +96,7 @@ class DailyWinJournal {
                 this.render();
             });
         });
+        console.log('✅ Filter buttons listeners attached');
 
         // Export button
         const exportBtn = document.getElementById('exportBtn');
@@ -109,6 +124,8 @@ class DailyWinJournal {
 
         // Feedback
         this.setupFeedbackModal();
+        
+        console.log('✅ All event listeners set up');
     }
 
     // Toggle between signup and login modes
@@ -138,9 +155,13 @@ class DailyWinJournal {
 
     // Handle login/signup
     async handleLogin() {
+        console.log('🔓 handleLogin called');
+        
         const email = document.getElementById('userLoginEmail').value.trim().toLowerCase();
         const password = document.getElementById('userLoginPassword').value.trim();
         const errorDiv = document.getElementById('authError');
+
+        console.log('Email:', email, 'Password length:', password.length);
 
         if (!email) {
             errorDiv.textContent = '❌ Please enter your email.';
@@ -165,6 +186,8 @@ class DailyWinJournal {
         const hashedPassword = this.hashPassword(password);
 
         try {
+            console.log('Attempting', this.isSignupMode ? 'signup' : 'login', 'for', email);
+            
             const userRef = this.db.collection('users').doc(email);
             
             if (this.isSignupMode) {
@@ -176,6 +199,7 @@ class DailyWinJournal {
                 }
                 
                 // Create new user
+                console.log('Creating new user...');
                 await userRef.set({
                     email: email,
                     password: hashedPassword,
@@ -183,6 +207,7 @@ class DailyWinJournal {
                     wins: []
                 });
                 
+                console.log('✅ User created successfully');
                 errorDiv.textContent = '✅ Account created! Signing in...';
                 errorDiv.style.color = '#51cf66';
                 
@@ -191,6 +216,7 @@ class DailyWinJournal {
                 }, 1000);
             } else {
                 // Login mode
+                console.log('Checking existing user...');
                 const doc = await userRef.get();
                 if (!doc.exists) {
                     errorDiv.textContent = '❌ Email not found. Create an account first.';
@@ -202,6 +228,7 @@ class DailyWinJournal {
                     return;
                 }
 
+                console.log('✅ Credentials correct, logging in...');
                 this.completeLogin(email, errorDiv);
             }
         } catch (error) {
@@ -574,15 +601,21 @@ class DailyWinJournal {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Page loaded');
+    console.log('🚀 DOMContentLoaded fired');
+    console.log('window.db:', window.db);
+    console.log('firebase:', window.firebase);
     
     // Wait for Firebase
     setTimeout(() => {
+        console.log('Checking Firebase after 1 second...');
+        console.log('window.db:', window.db);
+        
         if (window.db) {
-            console.log('✅ Firebase ready');
+            console.log('✅ Firebase ready - initializing journal');
             window.journal = new DailyWinJournal();
+            console.log('✅ Journal created');
         } else {
-            console.error('❌ Firebase not ready');
+            console.error('❌ Firebase not ready after 1 second');
             const errorDiv = document.getElementById('authError');
             if (errorDiv) {
                 errorDiv.textContent = '❌ Firebase connection failed. Check your internet.';
