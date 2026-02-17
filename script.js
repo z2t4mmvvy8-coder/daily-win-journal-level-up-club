@@ -1,21 +1,3 @@
-// Firebase setup - wait for Firebase to load
-let db;
-
-function initializeFirebase() {
-    if (!window.firebase) {
-        console.error('Firebase not loaded yet');
-        setTimeout(initializeFirebase, 100);
-        return;
-    }
-    
-    // Initialize Firebase
-    const app = firebase.initializeApp(window.firebaseConfig);
-    db = firebase.firestore();
-    
-    // Initialize the journal app
-    window.journal = new DailyWinJournal();
-}
-
 // Daily Win Journal App
 class DailyWinJournal {
     constructor() {
@@ -24,40 +6,35 @@ class DailyWinJournal {
         this.currentUser = null;
         
         this.checkLoginState();
-        this.initEventListeners();
+        this.setupEventListeners();
     }
 
-    // Check if user is logged in
+    // Check if user is already logged in
     checkLoginState() {
         const savedEmail = localStorage.getItem('userEmail');
         if (savedEmail) {
             this.currentUser = savedEmail;
-            this.signin();
+            this.showApp();
         }
     }
 
-    // Initialize event listeners
-    initEventListeners() {
+    // Set up all event listeners
+    setupEventListeners() {
         // Login button
-        const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) {
-            loginBtn.addEventListener('click', () => this.handleLogin());
-        }
-        
-        // Logout button
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', () => this.handleLogout());
-        }
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            this.handleLogin();
+        });
 
-        // Form submission
-        const winForm = document.getElementById('winForm');
-        if (winForm) {
-            winForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.addWin();
-            });
-        }
+        // Logout button
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            this.handleLogout();
+        });
+
+        // Win form
+        document.getElementById('winForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.addWin();
+        });
 
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -70,29 +47,26 @@ class DailyWinJournal {
         });
 
         // Export button
-        const exportBtn = document.getElementById('exportBtn');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', () => this.exportData());
-        }
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            this.exportData();
+        });
 
-        // Clear button  
-        const clearBtn = document.getElementById('clearBtn');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => this.clearAll());
-        }
+        // Clear button
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            this.clearAll();
+        });
 
-        // Email all wins button
-        const emailAllBtn = document.getElementById('emailAllBtn');
-        if (emailAllBtn) {
-            emailAllBtn.addEventListener('click', () => this.emailAllWins());
-        }
+        // Email all wins
+        document.getElementById('emailAllBtn').addEventListener('click', () => {
+            this.emailAllWins();
+        });
 
-        // Feedback modal
+        // Feedback
         this.setupFeedbackModal();
     }
 
     // Handle login
-    async handleLogin() {
+    handleLogin() {
         const email = document.getElementById('userLoginEmail').value.trim();
         const errorDiv = document.getElementById('authError');
 
@@ -106,35 +80,21 @@ class DailyWinJournal {
             return;
         }
 
-        errorDiv.textContent = '';
         this.currentUser = email;
         localStorage.setItem('userEmail', email);
-        this.signin();
-    }
-
-    // Sign in UI update
-    async signin() {
-        // Hide auth screen, show app
-        document.getElementById('authScreen').classList.add('hidden');
-        document.getElementById('appScreen').classList.remove('hidden');
+        errorDiv.textContent = '';
         
-        // Update user email display
-        document.getElementById('userEmail').textContent = `Signed in as: ${this.currentUser}`;
-        
-        // Load wins from Firestore
-        await this.loadDataFromFirestore();
-        this.render();
-        this.updateStats();
+        this.loadWins();
+        this.showApp();
     }
 
     // Handle logout
     handleLogout() {
-        if (confirm('Are you sure you want to sign out?')) {
+        if (confirm('Sign out?')) {
             this.currentUser = null;
             localStorage.removeItem('userEmail');
             this.wins = [];
             
-            // Show auth screen, hide app
             document.getElementById('authScreen').classList.remove('hidden');
             document.getElementById('appScreen').classList.add('hidden');
             document.getElementById('userLoginEmail').value = '';
@@ -142,52 +102,32 @@ class DailyWinJournal {
         }
     }
 
-    // Load wins from Firestore
-    async loadDataFromFirestore() {
-        try {
-            if (!db || !this.currentUser) return;
-            
-            const snapshot = await db.collection('users').doc(this.currentUser).collection('wins').get();
-            this.wins = [];
-            
-            snapshot.forEach(doc => {
-                this.wins.push({ id: doc.id, ...doc.data() });
-            });
-            
-            // Sort by date (newest first)
-            this.wins.sort((a, b) => new Date(b.date) - new Date(a.date));
-        } catch (error) {
-            console.error('Error loading wins:', error);
-        }
+    // Show the app screen
+    showApp() {
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('appScreen').classList.remove('hidden');
+        document.getElementById('userEmail').textContent = `Signed in as: ${this.currentUser}`;
+        
+        this.loadWins();
+        this.render();
+        this.updateStats();
     }
 
-    // Save win to Firestore
-    async saveWinToFirestore(win) {
-        try {
-            if (!db || !this.currentUser) return;
-            
-            const docRef = await db.collection('users').doc(this.currentUser).collection('wins').add(win);
-            win.id = docRef.id;
-            return win;
-        } catch (error) {
-            console.error('Error saving win:', error);
-            alert('Error saving win. Please try again.');
-        }
+    // Load wins from localStorage
+    loadWins() {
+        const key = `wins_${this.currentUser}`;
+        const saved = localStorage.getItem(key);
+        this.wins = saved ? JSON.parse(saved) : [];
     }
 
-    // Delete win from Firestore
-    async deleteWinFromFirestore(id) {
-        try {
-            if (!db || !this.currentUser) return;
-            
-            await db.collection('users').doc(this.currentUser).collection('wins').doc(id).delete();
-        } catch (error) {
-            console.error('Error deleting win:', error);
-        }
+    // Save wins to localStorage
+    saveWins() {
+        const key = `wins_${this.currentUser}`;
+        localStorage.setItem(key, JSON.stringify(this.wins));
     }
 
     // Add a new win
-    async addWin() {
+    addWin() {
         const title = document.getElementById('winTitle').value.trim();
         const description = document.getElementById('winDescription').value.trim();
         const category = document.getElementById('winCategory').value;
@@ -195,6 +135,7 @@ class DailyWinJournal {
         if (!title) return;
 
         const win = {
+            id: Date.now().toString(),
             title,
             description,
             category,
@@ -205,29 +146,26 @@ class DailyWinJournal {
             })
         };
 
-        await this.saveWinToFirestore(win);
-        await this.loadDataFromFirestore();
+        this.wins.unshift(win);
+        this.saveWins();
         this.render();
         this.updateStats();
 
-        // Reset form
         document.getElementById('winForm').reset();
-
-        // Show success message
         alert('🎉 Win added! Keep going!');
     }
 
     // Delete a win
-    async deleteWin(id) {
-        if (confirm('Are you sure you want to delete this win?')) {
-            await this.deleteWinFromFirestore(id);
+    deleteWin(id) {
+        if (confirm('Delete this win?')) {
             this.wins = this.wins.filter(win => win.id !== id);
+            this.saveWins();
             this.render();
             this.updateStats();
         }
     }
 
-    // Render wins to the DOM
+    // Render wins
     render() {
         const winsList = document.getElementById('winsList');
         const filtered = this.currentFilter === 'all'
@@ -235,7 +173,7 @@ class DailyWinJournal {
             : this.wins.filter(win => win.category === this.currentFilter);
 
         if (filtered.length === 0) {
-            winsList.innerHTML = '<p class="empty-state">No wins in this category yet. Add your first win!</p>';
+            winsList.innerHTML = '<p class="empty-state">No wins yet. Add your first win!</p>';
             return;
         }
 
@@ -254,7 +192,7 @@ class DailyWinJournal {
         `).join('');
     }
 
-    // Update statistics
+    // Update stats
     updateStats() {
         const totalWins = this.wins.length;
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -266,7 +204,7 @@ class DailyWinJournal {
         document.getElementById('streakDays').textContent = streak;
     }
 
-    // Calculate streak (consecutive days with wins)
+    // Calculate streak
     calculateStreak() {
         if (this.wins.length === 0) return 0;
 
@@ -290,7 +228,7 @@ class DailyWinJournal {
         return streak;
     }
 
-    // Export data as JSON
+    // Export data
     exportData() {
         const dataStr = JSON.stringify(this.wins, null, 2);
         const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -303,21 +241,17 @@ class DailyWinJournal {
     }
 
     // Clear all data
-    async clearAll() {
-        if (confirm('Are you sure? This will delete all your wins!')) {
-            // Delete all wins from Firestore
-            for (let win of this.wins) {
-                await this.deleteWinFromFirestore(win.id);
-            }
-            
+    clearAll() {
+        if (confirm('Delete ALL wins? This cannot be undone!')) {
             this.wins = [];
+            this.saveWins();
             this.render();
             this.updateStats();
-            alert('All wins have been cleared.');
+            alert('All wins deleted.');
         }
     }
 
-    // Escape HTML to prevent XSS
+    // Escape HTML
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -331,19 +265,14 @@ class DailyWinJournal {
             return;
         }
 
-        // Format all wins into email content
         const emailContent = this.formatWinsForEmail();
-        
-        // Use mailto link to open default email client
         const subject = `My Daily Wins Journal - ${new Date().toLocaleDateString()}`;
-        const body = emailContent;
-        const mailtoLink = `mailto:${this.currentUser}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        const mailtoLink = `mailto:${this.currentUser}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailContent)}`;
         
         window.location.href = mailtoLink;
-        alert('Opening your email client. If it didn\'t open, copy-paste the content manually.');
     }
 
-    // Format wins for email display
+    // Format wins for email
     formatWinsForEmail() {
         const header = `🏆 DAILY WIN JOURNAL - ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\n`;
         const divider = '='.repeat(60) + '\n\n';
@@ -354,37 +283,31 @@ class DailyWinJournal {
 
         const stats = `\n${divider}STATISTICS:\n- Total Wins: ${this.wins.length}\n- Streak Days: ${this.calculateStreak()}\n`;
         
-        return header + divider + winsText + stats + `\n✨ Keep winning! 💪\n\nJournal URL: ${window.location.href}`;
+        return header + divider + winsText + stats + `\n✨ Keep winning! 💪`;
     }
 
     // Setup feedback modal
     setupFeedbackModal() {
-        const feedbackToggle = document.getElementById('feedbackToggle');
-        const feedbackModal = document.getElementById('feedbackModal');
-        const feedbackClose = document.getElementById('feedbackClose');
-        const feedbackForm = document.getElementById('feedbackForm');
+        const toggle = document.getElementById('feedbackToggle');
+        const modal = document.getElementById('feedbackModal');
+        const close = document.getElementById('feedbackClose');
+        const form = document.getElementById('feedbackForm');
 
-        if (!feedbackToggle) return;
-
-        // Open modal
-        feedbackToggle.addEventListener('click', () => {
-            feedbackModal.classList.remove('hidden');
+        toggle.addEventListener('click', () => {
+            modal.classList.remove('hidden');
         });
 
-        // Close modal
-        feedbackClose.addEventListener('click', () => {
-            feedbackModal.classList.add('hidden');
+        close.addEventListener('click', () => {
+            modal.classList.add('hidden');
         });
 
-        // Close modal when clicking outside
-        feedbackModal.addEventListener('click', (e) => {
-            if (e.target === feedbackModal) {
-                feedbackModal.classList.add('hidden');
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.add('hidden');
             }
         });
 
-        // Handle form submission
-        feedbackForm.addEventListener('submit', (e) => {
+        form.addEventListener('submit', (e) => {
             e.preventDefault();
             this.submitFeedback();
         });
@@ -395,21 +318,18 @@ class DailyWinJournal {
         const name = document.getElementById('feedbackName').value.trim();
         const email = document.getElementById('feedbackEmail').value.trim();
         const message = document.getElementById('feedbackMessage').value.trim();
-        const feedbackNote = document.getElementById('feedbackNote');
+        const note = document.getElementById('feedbackNote');
 
         if (!name || !email || !message) {
-            feedbackNote.textContent = 'Please fill in all fields.';
-            feedbackNote.style.color = '#ff6b6b';
+            note.textContent = 'Please fill all fields.';
+            note.style.color = '#ff6b6b';
             return;
         }
 
-        // Use Formspree for feedback
         const formId = localStorage.getItem('formspreeId');
         
         if (!formId) {
-            feedbackNote.textContent = 'Setup required: Please save your Formspree ID first.';
-            feedbackNote.style.color = '#ff6b6b';
-            const id = prompt('Get your Formspree ID from https://formspree.io/\nPaste your Form ID here (starts with "f_"):');
+            const id = prompt('Get ID from https://formspree.io/\nPaste Form ID (starts with f_):');
             if (id) {
                 localStorage.setItem('formspreeId', id);
                 this.submitFeedback();
@@ -417,57 +337,45 @@ class DailyWinJournal {
             return;
         }
 
-        // Create FormData for Formspree
         const formData = new FormData();
         formData.append('name', name);
         formData.append('email', email);
         formData.append('message', message);
 
-        const submitBtn = document.querySelector('.feedback-form button');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Sending...';
+        const btn = document.querySelector('.feedback-form button');
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
 
-        // Send to Formspree
         fetch(`https://formspree.io/f/${formId}`, {
             method: 'POST',
             body: formData,
-            headers: {
-                'Accept': 'application/json'
-            }
+            headers: { 'Accept': 'application/json' }
         })
         .then(response => {
             if (response.ok) {
-                feedbackNote.textContent = '✅ Feedback sent! Thank you!';
-                feedbackNote.style.color = '#51cf66';
+                note.textContent = '✅ Sent!';
+                note.style.color = '#51cf66';
                 document.getElementById('feedbackForm').reset();
                 setTimeout(() => {
                     document.getElementById('feedbackModal').classList.add('hidden');
-                    feedbackNote.textContent = '';
+                    note.textContent = '';
                 }, 2000);
             } else {
-                throw new Error('Failed to send');
+                throw new Error('Failed');
             }
         })
         .catch(error => {
-            feedbackNote.textContent = '❌ Error sending feedback. Please try again.';
-            feedbackNote.style.color = '#ff6b6b';
-            console.error('Feedback error:', error);
+            note.textContent = '❌ Error. Try again.';
+            note.style.color = '#ff6b6b';
         })
         .finally(() => {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Send Feedback';
+            btn.disabled = false;
+            btn.textContent = 'Send Feedback';
         });
     }
 }
 
-// Initialize the journal when Firebase is ready
+// Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    // Wait a moment for Firebase scripts to load
-    setTimeout(() => {
-        if (window.firebase && window.firebaseConfig) {
-            initializeFirebase();
-        } else {
-            console.error('Firebase not available');
-        }
-    }, 500);
+    window.journal = new DailyWinJournal();
 });
