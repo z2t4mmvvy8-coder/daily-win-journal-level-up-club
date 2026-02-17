@@ -1,6 +1,7 @@
 // Daily Win Journal App
 class DailyWinJournal {
     constructor() {
+        console.log('📝 Constructor called');
         this.wins = [];
         this.currentFilter = 'all';
         this.currentUser = null;
@@ -21,20 +22,32 @@ class DailyWinJournal {
     // Set up all event listeners
     setupEventListeners() {
         // Login button
-        document.getElementById('loginBtn').addEventListener('click', () => {
-            this.handleLogin();
-        });
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                console.log('Login clicked');
+                this.handleLogin();
+            });
+        } else {
+            console.error('loginBtn not found');
+        }
 
         // Logout button
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            this.handleLogout();
-        });
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                this.handleLogout();
+            });
+        }
 
         // Win form
-        document.getElementById('winForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.addWin();
-        });
+        const winForm = document.getElementById('winForm');
+        if (winForm) {
+            winForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.addWin();
+            });
+        }
 
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -47,19 +60,28 @@ class DailyWinJournal {
         });
 
         // Export button
-        document.getElementById('exportBtn').addEventListener('click', () => {
-            this.exportData();
-        });
+        const exportBtn = document.getElementById('exportBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                this.exportData();
+            });
+        }
 
         // Clear button
-        document.getElementById('clearBtn').addEventListener('click', () => {
-            this.clearAll();
-        });
+        const clearBtn = document.getElementById('clearBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.clearAll();
+            });
+        }
 
         // Email all wins
-        document.getElementById('emailAllBtn').addEventListener('click', () => {
-            this.emailAllWins();
-        });
+        const emailAllBtn = document.getElementById('emailAllBtn');
+        if (emailAllBtn) {
+            emailAllBtn.addEventListener('click', () => {
+                this.emailAllWins();
+            });
+        }
 
         // Feedback
         this.setupFeedbackModal();
@@ -293,6 +315,11 @@ class DailyWinJournal {
         const close = document.getElementById('feedbackClose');
         const form = document.getElementById('feedbackForm');
 
+        if (!toggle || !modal || !close || !form) {
+            console.error('Feedback modal elements missing');
+            return;
+        }
+
         toggle.addEventListener('click', () => {
             modal.classList.remove('hidden');
         });
@@ -377,5 +404,7 @@ class DailyWinJournal {
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 DOMContentLoaded fired - initializing Daily Win Journal');
     window.journal = new DailyWinJournal();
+    console.log('✅ Journal initialized');
 });
