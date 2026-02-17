@@ -1,33 +1,14 @@
-// Daily Win Journal App with Firebase Firestore Cloud Sync (+ localStorage fallback)
+// Daily Win Journal - Simple localStorage version (NO Firebase)
 class DailyWinJournal {
     constructor() {
-        console.log('📝 Journal Constructor called');
+        console.log('🚀 Daily Win Journal initialized');
         this.wins = [];
         this.currentFilter = 'all';
         this.currentUser = null;
         this.isSignupMode = false;
-        this.db = window.db;
-        this.unsubscribe = null;
-        this.useCloudSync = true; // Will be set to false if Firestore fails
-        
-        if (!this.db) {
-            console.error('❌ Firebase Firestore not initialized');
-            this.useCloudSync = false;
-            this.showError('Using local storage only (Firebase not available)');
-        } else {
-            console.log('✅ Using Firebase Firestore');
-        }
         
         this.checkLoginState();
         this.setupEventListeners();
-    }
-
-    showError(message) {
-        const errorDiv = document.getElementById('authError');
-        if (errorDiv) {
-            errorDiv.textContent = '⚠️ ' + message;
-            errorDiv.style.display = 'block';
-        }
     }
 
     // Check if user is already logged in
@@ -35,40 +16,29 @@ class DailyWinJournal {
         const savedEmail = localStorage.getItem('userEmail');
         if (savedEmail) {
             this.currentUser = savedEmail;
-            this.loadWinsFromCloud();
+            this.loadWins();
             this.showApp();
         }
     }
 
     // Set up all event listeners
     setupEventListeners() {
-        console.log('⚙️ Setting up event listeners...');
-        
         // Login button
         const loginBtn = document.getElementById('loginBtn');
-        console.log('loginBtn element:', loginBtn);
-        
         if (loginBtn) {
-            loginBtn.addEventListener('click', (e) => {
-                console.log('🔐 LOGIN BUTTON CLICKED!', e);
+            loginBtn.addEventListener('click', () => {
+                console.log('Login button clicked');
                 this.handleLogin();
             });
-            console.log('✅ Login button listener attached');
-        } else {
-            console.error('❌ loginBtn element not found!');
         }
 
         // Toggle signup/login mode
         const toggleSignup = document.getElementById('toggleSignup');
-        console.log('toggleSignup element:', toggleSignup);
-        
         if (toggleSignup) {
             toggleSignup.addEventListener('click', (e) => {
                 e.preventDefault();
-                console.log('Toggling signup mode');
                 this.toggleSignupMode();
             });
-            console.log('✅ Toggle signup listener attached');
         }
 
         // Logout button
@@ -77,7 +47,6 @@ class DailyWinJournal {
             logoutBtn.addEventListener('click', () => {
                 this.handleLogout();
             });
-            console.log('✅ Logout button listener attached');
         }
 
         // Win form
@@ -87,7 +56,6 @@ class DailyWinJournal {
                 e.preventDefault();
                 this.addWin();
             });
-            console.log('✅ Win form listener attached');
         }
 
         // Filter buttons
@@ -99,7 +67,6 @@ class DailyWinJournal {
                 this.render();
             });
         });
-        console.log('✅ Filter buttons listeners attached');
 
         // Export button
         const exportBtn = document.getElementById('exportBtn');
@@ -127,8 +94,6 @@ class DailyWinJournal {
 
         // Feedback
         this.setupFeedbackModal();
-        
-        console.log('✅ All event listeners set up');
     }
 
     // Toggle between signup and login modes
@@ -153,18 +118,25 @@ class DailyWinJournal {
 
     // Hash password
     hashPassword(password) {
-        return btoa(password + 'salt');
+        return btoa(password + 'salt_daily_wins_2024');
+    }
+
+    // Get all users
+    getAllUsers() {
+        const usersJson = localStorage.getItem('__dailyWins_users__');
+        return usersJson ? JSON.parse(usersJson) : {};
+    }
+
+    // Save users
+    saveAllUsers(users) {
+        localStorage.setItem('__dailyWins_users__', JSON.stringify(users));
     }
 
     // Handle login/signup
     async handleLogin() {
-        console.log('🔓 handleLogin called');
-        
         const email = document.getElementById('userLoginEmail').value.trim().toLowerCase();
         const password = document.getElementById('userLoginPassword').value.trim();
         const errorDiv = document.getElementById('authError');
-
-        console.log('Email:', email, 'Password length:', password.length);
 
         if (!email) {
             errorDiv.textContent = '❌ Please enter your email.';
@@ -187,88 +159,19 @@ class DailyWinJournal {
         }
 
         const hashedPassword = this.hashPassword(password);
+        const users = this.getAllUsers();
 
         try {
-            console.log('Attempting', this.isSignupMode ? 'signup' : 'login', 'for', email);
-            
-            // Try Firestore first
-            if (this.useCloudSync && this.db) {
-                try {
-                    const userRef = this.db.collection('users').doc(email);
-                    
-                    if (this.isSignupMode) {
-                        // Signup mode
-                        const doc = await userRef.get();
-                        if (doc.exists) {
-                            errorDiv.textContent = '❌ This email already has an account. Try signing in.';
-                            return;
-                        }
-                        
-                        // Create new user in Firestore
-                        console.log('Creating new user in Firestore...');
-                        await userRef.set({
-                            email: email,
-                            password: hashedPassword,
-                            createdAt: new Date(),
-                            wins: []
-                        });
-                        
-                        console.log('✅ User created in Firestore');
-                        errorDiv.textContent = '✅ Account created! Signing in...';
-                        errorDiv.style.color = '#51cf66';
-                        
-                        setTimeout(() => {
-                            this.completeLogin(email, errorDiv);
-                        }, 1000);
-                        return;
-                    } else {
-                        // Login mode
-                        console.log('Checking user in Firestore...');
-                        const doc = await userRef.get();
-                        if (!doc.exists) {
-                            errorDiv.textContent = '❌ Email not found. Create an account first.';
-                            return;
-                        }
-
-                        if (doc.data().password !== hashedPassword) {
-                            errorDiv.textContent = '❌ Incorrect password.';
-                            return;
-                        }
-
-                        console.log('✅ Firestore login successful');
-                        this.completeLogin(email, errorDiv);
-                        return;
-                    }
-                } catch (firestoreError) {
-                    console.warn('Firestore error:', firestoreError.message);
-                    
-                    // If it's an offline error, fall back to localStorage
-                    if (firestoreError.message.includes('offline')) {
-                        console.log('Firestore offline - using localStorage fallback');
-                        this.useCloudSync = false;
-                        // Continue to localStorage logic below
-                    } else {
-                        errorDiv.textContent = '❌ Error: ' + firestoreError.message;
-                        return;
-                    }
-                }
-            }
-            
-            // Fallback: Use localStorage only
-            console.log('Using localStorage for authentication');
-            const usersJson = localStorage.getItem('__users__');
-            const users = usersJson ? JSON.parse(usersJson) : {};
-            
             if (this.isSignupMode) {
-                // Signup
+                // Signup mode
                 if (users[email]) {
                     errorDiv.textContent = '❌ This email already has an account. Try signing in.';
                     return;
                 }
-                users[email] = hashedPassword;
-                localStorage.setItem('__users__', JSON.stringify(users));
                 
-                console.log('✅ User created in localStorage');
+                users[email] = hashedPassword;
+                this.saveAllUsers(users);
+                
                 errorDiv.textContent = '✅ Account created! Signing in...';
                 errorDiv.style.color = '#51cf66';
                 
@@ -276,20 +179,19 @@ class DailyWinJournal {
                     this.completeLogin(email, errorDiv);
                 }, 1000);
             } else {
-                // Login
+                // Login mode
                 if (!users[email]) {
                     errorDiv.textContent = '❌ Email not found. Create an account first.';
                     return;
                 }
+
                 if (users[email] !== hashedPassword) {
                     errorDiv.textContent = '❌ Incorrect password.';
                     return;
                 }
-                
-                console.log('✅ localStorage login successful');
+
                 this.completeLogin(email, errorDiv);
             }
-            
         } catch (error) {
             console.error('Auth error:', error);
             errorDiv.textContent = '❌ Error: ' + error.message;
@@ -303,83 +205,23 @@ class DailyWinJournal {
         errorDiv.textContent = '';
         errorDiv.style.color = '';
         
-        this.loadWinsFromCloud();
+        this.loadWins();
         this.showApp();
     }
 
-    // Load wins from cloud
-    loadWinsFromCloud() {
-        try {
-            if (this.unsubscribe) {
-                this.unsubscribe();
-            }
-
-            // If Firestore isn't available, use localStorage only
-            if (!this.useCloudSync || !this.db) {
-                console.log('Loading from localStorage (no Firestore)');
-                this.loadWinsLocal();
-                return;
-            }
-
-            // Try real-time listener
-            this.unsubscribe = this.db.collection('users').doc(this.currentUser)
-                .onSnapshot((doc) => {
-                    if (doc.exists) {
-                        this.wins = doc.data().wins || [];
-                        this.render();
-                        this.updateStats();
-                        console.log('✅ Wins synced from Firestore');
-                    }
-                }, (error) => {
-                    console.warn('Firestore listener error:', error.message);
-                    
-                    // If offline, switch to localStorage
-                    if (error.message.includes('offline')) {
-                        this.useCloudSync = false;
-                        console.log('Firestore offline - switching to localStorage');
-                    }
-                    
-                    this.loadWinsLocal();
-                });
-
-        } catch (error) {
-            console.error('Cloud load error:', error);
-            this.loadWinsLocal();
-        }
-    }
-
-    // Fallback: Load from localStorage
-    loadWinsLocal() {
-        const saved = localStorage.getItem(`wins_${this.currentUser}`);
+    // Load wins from localStorage
+    loadWins() {
+        const key = `wins_${this.currentUser}`;
+        const saved = localStorage.getItem(key);
         this.wins = saved ? JSON.parse(saved) : [];
-        console.log('Loaded', this.wins.length, 'wins from localStorage');
-        this.render();
-        this.updateStats();
+        console.log('Loaded', this.wins.length, 'wins');
     }
 
-    // Save wins to cloud (with localStorage fallback)
-    async saveWins() {
-        // Always save locally
-        localStorage.setItem(`wins_${this.currentUser}`, JSON.stringify(this.wins));
-        
-        // Try to save to Firestore if available
-        if (this.useCloudSync && this.db) {
-            try {
-                await this.db.collection('users').doc(this.currentUser).update({
-                    wins: this.wins,
-                    updatedAt: new Date()
-                });
-                console.log('✅ Synced to Firestore');
-            } catch (error) {
-                console.warn('Firestore save error:', error.message);
-                
-                // If offline, mark for later sync
-                if (error.message.includes('offline')) {
-                    console.log('⚠️ Firestore offline - saved locally only');
-                    this.useCloudSync = false;
-                }
-            }
-        }
+    // Save wins to localStorage
+    saveWins() {
+        const key = `wins_${this.currentUser}`;
+        localStorage.setItem(key, JSON.stringify(this.wins));
+        console.log('Saved', this.wins.length, 'wins');
     }
 
     // Add a win
@@ -571,10 +413,6 @@ class DailyWinJournal {
     // Logout
     handleLogout() {
         if (confirm('Sign out?')) {
-            if (this.unsubscribe) {
-                this.unsubscribe();
-            }
-
             this.currentUser = null;
             localStorage.removeItem('userEmail');
             this.wins = [];
@@ -685,28 +523,9 @@ class DailyWinJournal {
     }
 }
 
-// Initialize
+// Initialize app when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOMContentLoaded fired');
-    console.log('window.db:', window.db);
-    console.log('firebase:', window.firebase);
-    
-    // Wait for Firebase
-    setTimeout(() => {
-        console.log('Checking Firebase after 1 second...');
-        console.log('window.db:', window.db);
-        
-        if (window.db) {
-            console.log('✅ Firebase ready - initializing journal');
-            window.journal = new DailyWinJournal();
-            console.log('✅ Journal created');
-        } else {
-            console.error('❌ Firebase not ready after 1 second');
-            const errorDiv = document.getElementById('authError');
-            if (errorDiv) {
-                errorDiv.textContent = '❌ Firebase connection failed. Check your internet.';
-                errorDiv.style.display = 'block';
-            }
-        }
-    }, 1000);
+    console.log('📄 Page loaded - initializing app');
+    window.journal = new DailyWinJournal();
+    console.log('✅ Daily Win Journal ready!');
 });
