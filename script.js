@@ -5,6 +5,7 @@ class DailyWinJournal {
         this.wins = [];
         this.currentFilter = 'all';
         this.currentUser = null;
+        this.isSignupMode = false;
         
         this.checkLoginState();
         this.setupEventListeners();
@@ -30,6 +31,15 @@ class DailyWinJournal {
             });
         } else {
             console.error('loginBtn not found');
+        }
+
+        // Toggle signup/login mode
+        const toggleSignup = document.getElementById('toggleSignup');
+        if (toggleSignup) {
+            toggleSignup.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleSignupMode();
+            });
         }
 
         // Logout button
@@ -87,24 +97,106 @@ class DailyWinJournal {
         this.setupFeedbackModal();
     }
 
-    // Handle login
+    // Toggle between signup and login modes
+    toggleSignupMode() {
+        this.isSignupMode = !this.isSignupMode;
+        const authTitle = document.getElementById('authTitle');
+        const loginBtn = document.getElementById('loginBtn');
+        const toggleBtn = document.getElementById('toggleSignup');
+        const errorDiv = document.getElementById('authError');
+
+        if (this.isSignupMode) {
+            authTitle.textContent = 'Create Account';
+            loginBtn.textContent = 'Sign Up';
+            toggleBtn.textContent = 'Already have account? Sign In';
+        } else {
+            authTitle.textContent = 'Sign In';
+            loginBtn.textContent = 'Sign In';
+            toggleBtn.textContent = 'New user? Create Account';
+        }
+        errorDiv.textContent = '';
+    }
+
+    // Get all users from localStorage
+    getAllUsers() {
+        const usersJson = localStorage.getItem('__users__');
+        return usersJson ? JSON.parse(usersJson) : {};
+    }
+
+    // Save users to localStorage
+    saveAllUsers(users) {
+        localStorage.setItem('__users__', JSON.stringify(users));
+    }
+
+    // Simple hash function for passwords
+    hashPassword(password) {
+        // This is a simple approach - not cryptographically secure
+        // For production, use proper password hashing
+        return btoa(password + 'salt'); // Base64 encoding
+    }
+
+    // Handle login/signup
     handleLogin() {
         const email = document.getElementById('userLoginEmail').value.trim();
+        const password = document.getElementById('userLoginPassword').value.trim();
         const errorDiv = document.getElementById('authError');
 
         if (!email) {
-            errorDiv.textContent = 'Please enter your email.';
+            errorDiv.textContent = '❌ Please enter your email.';
             return;
         }
 
         if (!email.includes('@')) {
-            errorDiv.textContent = 'Please enter a valid email.';
+            errorDiv.textContent = '❌ Please enter a valid email.';
             return;
         }
 
+        if (!password) {
+            errorDiv.textContent = '❌ Please enter a password.';
+            return;
+        }
+
+        if (password.length < 4) {
+            errorDiv.textContent = '❌ Password must be at least 4 characters.';
+            return;
+        }
+
+        const users = this.getAllUsers();
+        const hashedPassword = this.hashPassword(password);
+
+        if (this.isSignupMode) {
+            // Signup mode - create new account
+            if (users[email]) {
+                errorDiv.textContent = '❌ This email already has an account. Try signing in.';
+                return;
+            }
+            users[email] = hashedPassword;
+            this.saveAllUsers(users);
+            errorDiv.textContent = '✅ Account created! Signing in...';
+            errorDiv.style.color = '#51cf66';
+            setTimeout(() => {
+                this.completeLogin(email, errorDiv);
+            }, 1000);
+        } else {
+            // Login mode - verify credentials
+            if (!users[email]) {
+                errorDiv.textContent = '❌ Email not found. Create an account first.';
+                return;
+            }
+            if (users[email] !== hashedPassword) {
+                errorDiv.textContent = '❌ Incorrect password.';
+                return;
+            }
+            this.completeLogin(email, errorDiv);
+        }
+    }
+
+    // Complete the login process
+    completeLogin(email, errorDiv) {
         this.currentUser = email;
         localStorage.setItem('userEmail', email);
         errorDiv.textContent = '';
+        errorDiv.style.color = '';
         
         this.loadWins();
         this.showApp();
@@ -116,11 +208,21 @@ class DailyWinJournal {
             this.currentUser = null;
             localStorage.removeItem('userEmail');
             this.wins = [];
+            this.isSignupMode = false;
             
             document.getElementById('authScreen').classList.remove('hidden');
             document.getElementById('appScreen').classList.add('hidden');
             document.getElementById('userLoginEmail').value = '';
+            document.getElementById('userLoginPassword').value = '';
             document.getElementById('authError').textContent = '';
+            
+            // Reset auth form to login mode
+            const authTitle = document.getElementById('authTitle');
+            const loginBtn = document.getElementById('loginBtn');
+            const toggleBtn = document.getElementById('toggleSignup');
+            authTitle.textContent = 'Sign In';
+            loginBtn.textContent = 'Sign In';
+            toggleBtn.textContent = 'New user? Create Account';
         }
     }
 

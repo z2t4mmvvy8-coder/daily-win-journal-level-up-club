@@ -116,6 +116,22 @@ body {
     text-decoration: underline;
 }
 
+.link-btn {
+    background: none;
+    border: none;
+    color: #1976d2;
+    text-decoration: none;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 1em;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.link-btn:hover {
+    color: #0d47a1;
+}
+
 /* App Screen */
 .app-screen {
     display: block;
