@@ -153,41 +153,32 @@
             appId: "1:811716650231:web:ec2a2648deb92344bf5ff2",
             measurementId: "G-82C5V9MQPB"
         };
-        
-        // Initialize Firebase on window load
-        window.firebaseReady = new Promise((resolve) => {
-            window.resolveFirebase = resolve;
-        });
     </script>
     
-    <!-- Firebase SDK (v9+ modular) -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
-        import { getFirestore, connectFirestoreEmulator } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
-        
+    <!-- Firebase SDK (Global scripts - more reliable) -->
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore-compat.js"></script>
+    <script>
         try {
-            const app = initializeApp(window.firebaseConfig);
-            window.db = getFirestore(app);
+            firebase.initializeApp(window.firebaseConfig);
+            window.db = firebase.firestore();
             
             // Enable offline persistence
-            import { enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
-            enableIndexedDbPersistence(window.db).catch((err) => {
+            window.db.enablePersistence().catch((err) => {
                 if (err.code === 'failed-precondition') {
-                    console.warn('Multiple tabs open, persistence disabled');
+                    console.warn('Multiple tabs, persistence disabled');
                 } else if (err.code === 'unimplemented') {
                     console.warn('Browser doesn\'t support persistence');
                 }
             });
             
-            console.log('✅ Firebase initialized successfully');
-            window.resolveFirebase(true);
+            console.log('✅ Firebase initialized');
         } catch (error) {
-            console.error('❌ Firebase initialization error:', error);
-            window.resolveFirebase(false);
+            console.error('❌ Firebase error:', error);
         }
     </script>
     
     <!-- App Script -->
-    <script type="module" src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
