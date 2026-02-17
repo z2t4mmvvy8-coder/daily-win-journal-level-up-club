@@ -1,32 +1,53 @@
-// Daily Win Journal - JavaScript Logic
+// Firebase setup
+const { initializeApp } = firebase;
+const { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc } = firebase.firestore;
+
+// Initialize Firebase
+const app = initializeApp(window.firebaseConfig);
+const db = getFirestore(app);
+
+// Daily Win Journal App
 class DailyWinJournal {
     constructor() {
         this.wins = [];
         this.currentFilter = 'all';
-        this.loadData();
-        this.loadEmailConfig();
+        this.currentUser = null;
+        
+        this.checkLoginState();
         this.initEventListeners();
-        this.render();
-        this.updateStats();
     }
 
-    // Initialize EmailJS (free service for sending emails)
-    loadEmailConfig() {
-        // Initialize EmailJS with public key
-        // Note: Users need to set up their own EmailJS account
-        const emailPublicKey = localStorage.getItem('emailPublicKey');
-        if (emailPublicKey) {
-            emailjs.init(emailPublicKey);
+    // Check if user is logged in
+    checkLoginState() {
+        const savedEmail = localStorage.getItem('userEmail');
+        if (savedEmail) {
+            this.currentUser = savedEmail;
+            this.signin();
         }
     }
 
     // Initialize event listeners
     initEventListeners() {
+        // Login button
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => this.handleLogin());
+        }
+        
+        // Logout button
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => this.handleLogout());
+        }
+
         // Form submission
-        document.getElementById('winForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.addWin();
-        });
+        const winForm = document.getElementById('winForm');
+        if (winForm) {
+            winForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.addWin();
+            });
+        }
 
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -39,117 +60,119 @@ class DailyWinJournal {
         });
 
         // Export button
-        document.getElementById('exportBtn').addEventListener('click', () => this.exportData());
-
-        // Clear button
-        document.getElementById('clearBtn').addEventListener('click', () => this.clearAll());
-
-        // Email all wins button
-        document.getElementById('emailAllBtn').addEventListener('click', () => this.emailAllWins());
-
-        // Load saved email from localStorage
-        const savedEmail = localStorage.getItem('userEmail');
-        if (savedEmail) {
-            document.getElementById('userEmail').value = savedEmail;
+        const exportBtn = document.getElementById('exportBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => this.exportData());
         }
 
-        // Save email to localStorage when user updates it
-        document.getElementById('userEmail').addEventListener('change', (e) => {
-            localStorage.setItem('userEmail', e.target.value);
-        });
+        // Clear button  
+        const clearBtn = document.getElementById('clearBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => this.clearAll());
+        }
+
+        // Email all wins button
+        const emailAllBtn = document.getElementById('emailAllBtn');
+        if (emailAllBtn) {
+            emailAllBtn.addEventListener('click', () => this.emailAllWins());
+        }
 
         // Feedback modal
         this.setupFeedbackModal();
     }
 
-    // Setup feedback modal
-    setupFeedbackModal() {
-        const feedbackToggle = document.getElementById('feedbackToggle');
-        const feedbackModal = document.getElementById('feedbackModal');
-        const feedbackClose = document.getElementById('feedbackClose');
-        const feedbackForm = document.getElementById('feedbackForm');
+    // Handle login
+    async handleLogin() {
+        const email = document.getElementById('userLoginEmail').value.trim();
+        const errorDiv = document.getElementById('authError');
 
-        // Open modal
-        feedbackToggle.addEventListener('click', () => {
-            feedbackModal.classList.remove('hidden');
-        });
-
-        // Close modal
-        feedbackClose.addEventListener('click', () => {
-            feedbackModal.classList.add('hidden');
-        });
-
-        // Close modal when clicking outside
-        feedbackModal.addEventListener('click', (e) => {
-            if (e.target === feedbackModal) {
-                feedbackModal.classList.add('hidden');
-            }
-        });
-
-        // Handle form submission
-        feedbackForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.submitFeedback();
-        });
-    }
-
-    // Submit feedback
-    submitFeedback() {
-        const name = document.getElementById('feedbackName').value.trim();
-        const email = document.getElementById('feedbackEmail').value.trim();
-        const message = document.getElementById('feedbackMessage').value.trim();
-        const feedbackNote = document.getElementById('feedbackNote');
-
-        if (!name || !email || !message) {
-            feedbackNote.textContent = 'Please fill in all fields.';
-            feedbackNote.style.color = '#ff6b6b';
+        if (!email) {
+            errorDiv.textContent = 'Please enter your email.';
             return;
         }
 
-        // Create FormData for Formspree
-        const formData = new FormData();
-        formData.append('name', name);
-        formData.append('email', email);
-        formData.append('message', message);
+        if (!email.includes('@')) {
+            errorDiv.textContent = 'Please enter a valid email.';
+            return;
+        }
 
-        const submitBtn = document.querySelector('.feedback-form button');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Sending...';
+        errorDiv.textContent = '';
+        this.currentUser = email;
+        localStorage.setItem('userEmail', email);
+        this.signin();
+    }
 
-        // Send to Formspree
-        fetch('https://formspree.io/f/meealkdb', {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => {
-            if (response.ok) {
-                feedbackNote.textContent = '✅ Feedback sent! Thank you!';
-                feedbackNote.style.color = '#51cf66';
-                document.getElementById('feedbackForm').reset();
-                setTimeout(() => {
-                    document.getElementById('feedbackModal').classList.add('hidden');
-                    feedbackNote.textContent = '';
-                }, 2000);
-            } else {
-                throw new Error('Failed to send');
-            }
-        })
-        .catch(error => {
-            feedbackNote.textContent = '❌ Error sending feedback. Please try again.';
-            feedbackNote.style.color = '#ff6b6b';
-            console.error('Feedback error:', error);
-        })
-        .finally(() => {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Send Feedback';
-        });
+    // Sign in UI update
+    async signin() {
+        // Hide auth screen, show app
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('appScreen').classList.remove('hidden');
+        
+        // Update user email display
+        document.getElementById('userEmail').textContent = `Signed in as: ${this.currentUser}`;
+        
+        // Load wins from Firestore
+        await this.loadDataFromFirestore();
+        this.render();
+        this.updateStats();
+    }
+
+    // Handle logout
+    handleLogout() {
+        if (confirm('Are you sure you want to sign out?')) {
+            this.currentUser = null;
+            localStorage.removeItem('userEmail');
+            this.wins = [];
+            
+            // Show auth screen, hide app
+            document.getElementById('authScreen').classList.remove('hidden');
+            document.getElementById('appScreen').classList.add('hidden');
+            document.getElementById('userLoginEmail').value = '';
+            document.getElementById('authError').textContent = '';
+        }
+    }
+
+    // Load wins from Firestore
+    async loadDataFromFirestore() {
+        try {
+            const q = query(collection(db, 'users', this.currentUser, 'wins'));
+            const snapshot = await getDocs(q);
+            this.wins = [];
+            
+            snapshot.forEach(doc => {
+                this.wins.push({ id: doc.id, ...doc.data() });
+            });
+            
+            // Sort by date (newest first)
+            this.wins.sort((a, b) => new Date(b.date) - new Date(a.date));
+        } catch (error) {
+            console.error('Error loading wins:', error);
+        }
+    }
+
+    // Save win to Firestore
+    async saveWinToFirestore(win) {
+        try {
+            const docRef = await addDoc(collection(db, 'users', this.currentUser, 'wins'), win);
+            win.id = docRef.id;
+            return win;
+        } catch (error) {
+            console.error('Error saving win:', error);
+            alert('Error saving win. Please try again.');
+        }
+    }
+
+    // Delete win from Firestore
+    async deleteWinFromFirestore(id) {
+        try {
+            await deleteDoc(doc(db, 'users', this.currentUser, 'wins', id));
+        } catch (error) {
+            console.error('Error deleting win:', error);
+        }
     }
 
     // Add a new win
-    addWin() {
+    async addWin() {
         const title = document.getElementById('winTitle').value.trim();
         const description = document.getElementById('winDescription').value.trim();
         const category = document.getElementById('winCategory').value;
@@ -157,7 +180,6 @@ class DailyWinJournal {
         if (!title) return;
 
         const win = {
-            id: Date.now(),
             title,
             description,
             category,
@@ -168,8 +190,8 @@ class DailyWinJournal {
             })
         };
 
-        this.wins.unshift(win);
-        this.saveData();
+        await this.saveWinToFirestore(win);
+        await this.loadDataFromFirestore();
         this.render();
         this.updateStats();
 
@@ -181,10 +203,10 @@ class DailyWinJournal {
     }
 
     // Delete a win
-    deleteWin(id) {
+    async deleteWin(id) {
         if (confirm('Are you sure you want to delete this win?')) {
+            await this.deleteWinFromFirestore(id);
             this.wins = this.wins.filter(win => win.id !== id);
-            this.saveData();
             this.render();
             this.updateStats();
         }
@@ -211,7 +233,7 @@ class DailyWinJournal {
                 <p class="win-date">${win.date}</p>
                 ${win.description ? `<p class="win-description">${this.escapeHtml(win.description)}</p>` : ''}
                 <div class="win-actions">
-                    <button class="btn-small btn-delete" onclick="journal.deleteWin(${win.id})">Delete</button>
+                    <button class="btn-small btn-delete" onclick="journal.deleteWin('${win.id}')">Delete</button>
                 </div>
             </div>
         `).join('');
@@ -253,17 +275,6 @@ class DailyWinJournal {
         return streak;
     }
 
-    // Save data to localStorage
-    saveData() {
-        localStorage.setItem('dailyWins', JSON.stringify(this.wins));
-    }
-
-    // Load data from localStorage
-    loadData() {
-        const saved = localStorage.getItem('dailyWins');
-        this.wins = saved ? JSON.parse(saved) : [];
-    }
-
     // Export data as JSON
     exportData() {
         const dataStr = JSON.stringify(this.wins, null, 2);
@@ -277,10 +288,14 @@ class DailyWinJournal {
     }
 
     // Clear all data
-    clearAll() {
+    async clearAll() {
         if (confirm('Are you sure? This will delete all your wins!')) {
+            // Delete all wins from Firestore
+            for (let win of this.wins) {
+                await this.deleteWinFromFirestore(win.id);
+            }
+            
             this.wins = [];
-            this.saveData();
             this.render();
             this.updateStats();
             alert('All wins have been cleared.');
@@ -296,13 +311,6 @@ class DailyWinJournal {
 
     // Email all wins
     emailAllWins() {
-        const userEmail = document.getElementById('userEmail').value.trim();
-        
-        if (!userEmail) {
-            alert('Please enter your email address first.');
-            return;
-        }
-
         if (this.wins.length === 0) {
             alert('No wins to email. Add some wins first!');
             return;
@@ -311,10 +319,10 @@ class DailyWinJournal {
         // Format all wins into email content
         const emailContent = this.formatWinsForEmail();
         
-        // Simple approach: Use mailto link to open default email client
+        // Use mailto link to open default email client
         const subject = `My Daily Wins Journal - ${new Date().toLocaleDateString()}`;
         const body = emailContent;
-        const mailtoLink = `mailto:${userEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        const mailtoLink = `mailto:${this.currentUser}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         
         window.location.href = mailtoLink;
         alert('Opening your email client. If it didn\'t open, copy-paste the content manually.');
@@ -333,9 +341,111 @@ class DailyWinJournal {
         
         return header + divider + winsText + stats + `\n✨ Keep winning! 💪\n\nJournal URL: ${window.location.href}`;
     }
+
+    // Setup feedback modal
+    setupFeedbackModal() {
+        const feedbackToggle = document.getElementById('feedbackToggle');
+        const feedbackModal = document.getElementById('feedbackModal');
+        const feedbackClose = document.getElementById('feedbackClose');
+        const feedbackForm = document.getElementById('feedbackForm');
+
+        if (!feedbackToggle) return;
+
+        // Open modal
+        feedbackToggle.addEventListener('click', () => {
+            feedbackModal.classList.remove('hidden');
+        });
+
+        // Close modal
+        feedbackClose.addEventListener('click', () => {
+            feedbackModal.classList.add('hidden');
+        });
+
+        // Close modal when clicking outside
+        feedbackModal.addEventListener('click', (e) => {
+            if (e.target === feedbackModal) {
+                feedbackModal.classList.add('hidden');
+            }
+        });
+
+        // Handle form submission
+        feedbackForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.submitFeedback();
+        });
+    }
+
+    // Submit feedback
+    submitFeedback() {
+        const name = document.getElementById('feedbackName').value.trim();
+        const email = document.getElementById('feedbackEmail').value.trim();
+        const message = document.getElementById('feedbackMessage').value.trim();
+        const feedbackNote = document.getElementById('feedbackNote');
+
+        if (!name || !email || !message) {
+            feedbackNote.textContent = 'Please fill in all fields.';
+            feedbackNote.style.color = '#ff6b6b';
+            return;
+        }
+
+        // Use Formspree for feedback
+        const formId = localStorage.getItem('formspreeId');
+        
+        if (!formId) {
+            feedbackNote.textContent = 'Setup required: Please save your Formspree ID first.';
+            feedbackNote.style.color = '#ff6b6b';
+            const id = prompt('Get your Formspree ID from https://formspree.io/\nPaste your Form ID here (starts with "f_"):');
+            if (id) {
+                localStorage.setItem('formspreeId', id);
+                this.submitFeedback();
+            }
+            return;
+        }
+
+        // Create FormData for Formspree
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('email', email);
+        formData.append('message', message);
+
+        const submitBtn = document.querySelector('.feedback-form button');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending...';
+
+        // Send to Formspree
+        fetch(`https://formspree.io/f/${formId}`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                feedbackNote.textContent = '✅ Feedback sent! Thank you!';
+                feedbackNote.style.color = '#51cf66';
+                document.getElementById('feedbackForm').reset();
+                setTimeout(() => {
+                    document.getElementById('feedbackModal').classList.add('hidden');
+                    feedbackNote.textContent = '';
+                }, 2000);
+            } else {
+                throw new Error('Failed to send');
+            }
+        })
+        .catch(error => {
+            feedbackNote.textContent = '❌ Error sending feedback. Please try again.';
+            feedbackNote.style.color = '#ff6b6b';
+            console.error('Feedback error:', error);
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Send Feedback';
+        });
+    }
 }
 
-// Initialize the journal when the page loads
+// Initialize the journal when Firebase is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.journal = new DailyWinJournal();
 });

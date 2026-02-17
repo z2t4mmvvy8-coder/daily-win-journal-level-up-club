@@ -7,12 +7,36 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Login Screen -->
+    <div id="authScreen" class="auth-screen">
+        <div class="auth-container">
+            <h1>🏆 Daily Win Journal</h1>
+            <p class="auth-subtitle">Level Up Club - Track Your Daily Wins</p>
+            
+            <div class="auth-form">
+                <h2>Sign In with Email</h2>
+                <div class="form-group">
+                    <label for="userLoginEmail">Email Address</label>
+                    <input type="email" id="userLoginEmail" placeholder="your@email.com" required>
+                </div>
+                <button type="button" id="loginBtn" class="btn-primary">Sign In</button>
+                <p id="authError" class="auth-error"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="appScreen" class="app-screen hidden">
     <div class="container">
         <header>
             <h1>🏆 Daily Win Journal</h1>
             <p class="subtitle">Level Up Club - Track Your Daily Wins</p>
             <p class="founders">Founders: Max Canders &amp; Patrick Duxbury</p>
-            <button id="feedbackToggle" class="feedback-btn">💬 Feedback</button>
+            <div class="header-right">
+                <span id="userEmail" class="user-email"></span>
+                <button id="logoutBtn" class="feedback-btn">👋 Sign Out</button>
+                <button id="feedbackToggle" class="feedback-btn">💬 Feedback</button>
+            </div>
         </header>
 
         <main>
@@ -74,7 +98,6 @@
             <section class="email-section">
                 <h2>Email Your Wins</h2>
                 <div class="email-form">
-                    <input type="email" id="userEmail" placeholder="Enter your email address" required>
                     <button id="emailAllBtn" class="btn-secondary">Email All Wins</button>
                 </div>
             </section>
@@ -85,6 +108,7 @@
             <button id="exportBtn" class="btn-secondary">Export Data</button>
             <button id="clearBtn" class="btn-secondary">Clear All</button>
         </footer>
+    </div>
     </div>
 
     <!-- Feedback Modal -->
@@ -111,8 +135,27 @@
         </div>
     </div>
 
+    <!-- Firebase Config -->
+    <script>
+        window.firebaseConfig = {
+            apiKey: "AIzaSyDqv5VaMGhvcn_uC6kkZi7s_mzviZZyDI8",
+            authDomain: "app67-48f6b.firebaseapp.com",
+            projectId: "app67-48f6b",
+            storageBucket: "app67-48f6b.firebasestorage.app",
+            messagingSenderId: "811716650231",
+            appId: "1:811716650231:web:ec2a2648deb92344bf5ff2",
+            measurementId: "G-82C5V9MQPB"
+        };
+    </script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
+    
     <!-- EmailJS Script -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/index.min.js"></script>
+    
+    <!-- App Script -->
     <script src="script.js"></script>
 </body>
 </html>
