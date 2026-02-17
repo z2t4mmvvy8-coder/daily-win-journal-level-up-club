@@ -153,19 +153,41 @@
             appId: "1:811716650231:web:ec2a2648deb92344bf5ff2",
             measurementId: "G-82C5V9MQPB"
         };
+        
+        // Initialize Firebase on window load
+        window.firebaseReady = new Promise((resolve) => {
+            window.resolveFirebase = resolve;
+        });
     </script>
     
     <!-- Firebase SDK (v9+ modular) -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
-        import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+        import { getFirestore, connectFirestoreEmulator } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
         
-        const app = initializeApp(window.firebaseConfig);
-        window.db = getFirestore(app);
-        console.log('✅ Firebase initialized');
+        try {
+            const app = initializeApp(window.firebaseConfig);
+            window.db = getFirestore(app);
+            
+            // Enable offline persistence
+            import { enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+            enableIndexedDbPersistence(window.db).catch((err) => {
+                if (err.code === 'failed-precondition') {
+                    console.warn('Multiple tabs open, persistence disabled');
+                } else if (err.code === 'unimplemented') {
+                    console.warn('Browser doesn\'t support persistence');
+                }
+            });
+            
+            console.log('✅ Firebase initialized successfully');
+            window.resolveFirebase(true);
+        } catch (error) {
+            console.error('❌ Firebase initialization error:', error);
+            window.resolveFirebase(false);
+        }
     </script>
     
-    <!-- App Script (No external dependencies needed!) -->
+    <!-- App Script -->
     <script type="module" src="script.js"></script>
 </body>
 </html>

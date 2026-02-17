@@ -23,6 +23,16 @@ class DailyWinJournal {
         this.db = window.db;
         this.unsubscribe = null;
         
+        if (!this.db) {
+            console.error('❌ Firebase not available');
+            const errorDiv = document.getElementById('authError');
+            if (errorDiv) {
+                errorDiv.textContent = '❌ Firebase connection failed. Check your internet.';
+                errorDiv.style.display = 'block';
+            }
+            return;
+        }
+        
         this.checkLoginState();
         this.setupEventListeners();
     }
@@ -168,8 +178,26 @@ class DailyWinJournal {
         const hashedPassword = this.hashPassword(password);
 
         try {
+            if (!this.db) {
+                throw new Error('Database not connected');
+            }
+
             const userRef = doc(this.db, 'users', email);
-            const userSnap = await getDoc(userRef);
+            let userSnap;
+            
+            try {
+                userSnap = await getDoc(userRef);
+            } catch (error) {
+                console.error('Firebase error:', error);
+                if (error.code === 'permission-denied') {
+                    errorDiv.textContent = '❌ Permission denied. Check Firebase setup.';
+                } else if (error.code === 'unavailable') {
+                    errorDiv.textContent = '❌ Firebase service unavailable. Try again later.';
+                } else {
+                    errorDiv.textContent = '❌ Connection error. Check your internet.';
+                }
+                return;
+            }
 
             if (this.isSignupMode) {
                 // Signup mode
@@ -179,12 +207,18 @@ class DailyWinJournal {
                 }
                 
                 // Create new user in Firestore
-                await setDoc(userRef, {
-                    email: email,
-                    password: hashedPassword,
-                    createdAt: new Date().toISOString(),
-                    wins: []
-                });
+                try {
+                    await setDoc(userRef, {
+                        email: email,
+                        password: hashedPassword,
+                        createdAt: new Date().toISOString(),
+                        wins: []
+                    });
+                } catch (error) {
+                    console.error('Error creating account:', error);
+                    errorDiv.textContent = '❌ Error creating account. Try again.';
+                    return;
+                }
                 
                 errorDiv.textContent = '✅ Account created! Signing in...';
                 errorDiv.style.color = '#51cf66';
@@ -208,7 +242,7 @@ class DailyWinJournal {
             }
         } catch (error) {
             console.error('Auth error:', error);
-            errorDiv.textContent = '❌ Error: ' + error.message;
+            errorDiv.textContent = '❌ Error: ' + (error.message || 'Unknown error');
         }
     }
 
@@ -585,16 +619,27 @@ class DailyWinJournal {
 }
 
 // Initialize when page loads
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 DOMContentLoaded fired - initializing Daily Win Journal');
     
-    // Wait a bit for Firebase to initialize
-    setTimeout(() => {
-        if (window.db) {
-            window.journal = new DailyWinJournal();
-            console.log('✅ Journal initialized with Firebase');
-        } else {
-            console.error('❌ Firebase DB not initialized');
+    try {
+        // Wait for Firebase to initialize
+        const firebaseReady = await window.firebaseReady;
+        
+        if (!firebaseReady || !window.db) {
+            throw new Error('Firebase failed to initialize');
         }
-    }, 500);
+        
+        console.log('✅ Firebase ready, starting app');
+        window.journal = new DailyWinJournal();
+        console.log('✅ Journal initialized with Firebase');
+    } catch (error) {
+        console.error('❌ Initialization error:', error);
+        // Show error to user
+        const authError = document.getElementById('authError');
+        if (authError) {
+            authError.textContent = '❌ Connection error. Please refresh the page.';
+            authError.style.display = 'block';
+        }
+    }
 });
