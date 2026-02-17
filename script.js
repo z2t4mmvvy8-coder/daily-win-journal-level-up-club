@@ -4,9 +4,20 @@ class DailyWinJournal {
         this.wins = [];
         this.currentFilter = 'all';
         this.loadData();
+        this.loadEmailConfig();
         this.initEventListeners();
         this.render();
         this.updateStats();
+    }
+
+    // Initialize EmailJS (free service for sending emails)
+    loadEmailConfig() {
+        // Initialize EmailJS with public key
+        // Note: Users need to set up their own EmailJS account
+        const emailPublicKey = localStorage.getItem('emailPublicKey');
+        if (emailPublicKey) {
+            emailjs.init(emailPublicKey);
+        }
     }
 
     // Initialize event listeners
@@ -32,6 +43,109 @@ class DailyWinJournal {
 
         // Clear button
         document.getElementById('clearBtn').addEventListener('click', () => this.clearAll());
+
+        // Email all wins button
+        document.getElementById('emailAllBtn').addEventListener('click', () => this.emailAllWins());
+
+        // Load saved email from localStorage
+        const savedEmail = localStorage.getItem('userEmail');
+        if (savedEmail) {
+            document.getElementById('userEmail').value = savedEmail;
+        }
+
+        // Save email to localStorage when user updates it
+        document.getElementById('userEmail').addEventListener('change', (e) => {
+            localStorage.setItem('userEmail', e.target.value);
+        });
+
+        // Feedback modal
+        this.setupFeedbackModal();
+    }
+
+    // Setup feedback modal
+    setupFeedbackModal() {
+        const feedbackToggle = document.getElementById('feedbackToggle');
+        const feedbackModal = document.getElementById('feedbackModal');
+        const feedbackClose = document.getElementById('feedbackClose');
+        const feedbackForm = document.getElementById('feedbackForm');
+
+        // Open modal
+        feedbackToggle.addEventListener('click', () => {
+            feedbackModal.classList.remove('hidden');
+        });
+
+        // Close modal
+        feedbackClose.addEventListener('click', () => {
+            feedbackModal.classList.add('hidden');
+        });
+
+        // Close modal when clicking outside
+        feedbackModal.addEventListener('click', (e) => {
+            if (e.target === feedbackModal) {
+                feedbackModal.classList.add('hidden');
+            }
+        });
+
+        // Handle form submission
+        feedbackForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.submitFeedback();
+        });
+    }
+
+    // Submit feedback
+    submitFeedback() {
+        const name = document.getElementById('feedbackName').value.trim();
+        const email = document.getElementById('feedbackEmail').value.trim();
+        const message = document.getElementById('feedbackMessage').value.trim();
+        const feedbackNote = document.getElementById('feedbackNote');
+
+        if (!name || !email || !message) {
+            feedbackNote.textContent = 'Please fill in all fields.';
+            feedbackNote.style.color = '#ff6b6b';
+            return;
+        }
+
+        // Create FormData for Formspree
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('email', email);
+        formData.append('message', message);
+
+        const submitBtn = document.querySelector('.feedback-form button');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending...';
+
+        // Send to Formspree
+        fetch('https://formspree.io/f/meealkdb', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                feedbackNote.textContent = '✅ Feedback sent! Thank you!';
+                feedbackNote.style.color = '#51cf66';
+                document.getElementById('feedbackForm').reset();
+                setTimeout(() => {
+                    document.getElementById('feedbackModal').classList.add('hidden');
+                    feedbackNote.textContent = '';
+                }, 2000);
+            } else {
+                throw new Error('Failed to send');
+            }
+        })
+        .catch(error => {
+            feedbackNote.textContent = '❌ Error sending feedback. Please try again.';
+            feedbackNote.style.color = '#ff6b6b';
+            console.error('Feedback error:', error);
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Send Feedback';
+        });
     }
 
     // Add a new win
@@ -178,6 +292,46 @@ class DailyWinJournal {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // Email all wins
+    emailAllWins() {
+        const userEmail = document.getElementById('userEmail').value.trim();
+        
+        if (!userEmail) {
+            alert('Please enter your email address first.');
+            return;
+        }
+
+        if (this.wins.length === 0) {
+            alert('No wins to email. Add some wins first!');
+            return;
+        }
+
+        // Format all wins into email content
+        const emailContent = this.formatWinsForEmail();
+        
+        // Simple approach: Use mailto link to open default email client
+        const subject = `My Daily Wins Journal - ${new Date().toLocaleDateString()}`;
+        const body = emailContent;
+        const mailtoLink = `mailto:${userEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        
+        window.location.href = mailtoLink;
+        alert('Opening your email client. If it didn\'t open, copy-paste the content manually.');
+    }
+
+    // Format wins for email display
+    formatWinsForEmail() {
+        const header = `🏆 DAILY WIN JOURNAL - ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\n`;
+        const divider = '='.repeat(60) + '\n\n';
+        
+        const winsText = this.wins.map((win, index) => {
+            return `${index + 1}. [${win.category.toUpperCase()}] ${win.title}\n   Date: ${win.date}\n${win.description ? `   Details: ${win.description}\n` : ''}`;
+        }).join('\n');
+
+        const stats = `\n${divider}STATISTICS:\n- Total Wins: ${this.wins.length}\n- Streak Days: ${this.calculateStreak()}\n`;
+        
+        return header + divider + winsText + stats + `\n✨ Keep winning! 💪\n\nJournal URL: ${window.location.href}`;
     }
 }
 

@@ -12,6 +12,7 @@
             <h1>🏆 Daily Win Journal</h1>
             <p class="subtitle">Level Up Club - Track Your Daily Wins</p>
             <p class="founders">Founders: Max Canders &amp; Patrick Duxbury</p>
+            <button id="feedbackToggle" class="feedback-btn">💬 Feedback</button>
         </header>
 
         <main>
@@ -71,6 +72,15 @@
             </section>
         </main>
 
+            <section class="email-section">
+                <h2>Email Your Wins</h2>
+                <div class="email-form">
+                    <input type="email" id="userEmail" placeholder="Enter your email address" required>
+                    <button id="emailAllBtn" class="btn-secondary">Email All Wins</button>
+                </div>
+            </section>
+        </main>
+
         <footer>
             <p>© 2025 Level Up Club - Daily Win Journal. Keep winning! 💪</p>
             <button id="exportBtn" class="btn-secondary">Export Data</button>
@@ -78,6 +88,32 @@
         </footer>
     </div>
 
+    <!-- Feedback Modal -->
+    <div id="feedbackModal" class="modal hidden">
+        <div class="modal-content">
+            <button id="feedbackClose" class="modal-close">&times;</button>
+            <h2>Send Us Feedback</h2>
+            <form id="feedbackForm" class="feedback-form">
+                <div class="form-group">
+                    <label for="feedbackName">Your Name</label>
+                    <input type="text" id="feedbackName" name="name" placeholder="Your name" required>
+                </div>
+                <div class="form-group">
+                    <label for="feedbackEmail">Your Email</label>
+                    <input type="email" id="feedbackEmail" name="email" placeholder="Your email" required>
+                </div>
+                <div class="form-group">
+                    <label for="feedbackMessage">Your Feedback</label>
+                    <textarea id="feedbackMessage" name="message" placeholder="Tell us what you think..." rows="5" required></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Send Feedback</button>
+            </form>
+            <p class="feedback-note" id="feedbackNote"></p>
+        </div>
+    </div>
+
+    <!-- EmailJS Script -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/index.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
